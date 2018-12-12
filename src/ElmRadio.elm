@@ -27,6 +27,7 @@ type FormError
     = EmptyString
     | NotInt
     | TooOld
+    | NotATransmission
 
 type alias Model =
     { car : Car
@@ -51,7 +52,13 @@ formValidator fields =
     FV.valid Car
         |> FV.required fields "brand" (FV.stringField <| FV.notEmpty EmptyString FV.success)
         |> FV.required fields "model" (FV.stringField <| FV.notEmpty EmptyString FV.success)
-        |> FV.hardcoded Manual -- FIXME
+        |> FV.required fields "transmission" (FV.stringField <|
+            \trans ->
+                case trans of
+                    "manual" -> FV.success Manual
+                    "automatic" -> FV.success Automatic
+                    _ -> FV.failure NotATransmission
+                )
         |> FV.required fields "year" (FV.stringField <| FV.int NotInt <|
             \year ->
                 if year < 1900 then
@@ -65,7 +72,44 @@ view model =
     div []
         [ inputField model "Brand" "brand"
         , inputField model "Model" "model"
+        , radioField model "Transmission" "transmission"
         , inputField model "Year" "year"
+        ]
+
+radioField : Model -> String -> String -> Html Msg
+radioField model caption fieldName =
+    div []
+        [ label [] [ text (caption ++ ":") ]
+        -- TODO: automate
+        , label []
+            [ input
+                [ type_ "radio"
+                , name fieldName
+                , value "manual"
+                , onInput (FU.stringFieldMsg FormUpdated fieldName)
+                ]
+                []
+            , text "Manual"
+            ]
+        , label []
+            [ input
+                [ type_ "radio"
+                , name fieldName
+                , value "automatic"
+                , onInput (FU.stringFieldMsg FormUpdated fieldName)
+                ]
+                []
+            , text "Automatic"
+            ]
+        , case model.formResults of
+            FR.Invalid d ->
+                case Dict.get fieldName d of
+                    Just de ->
+                        case de of
+                            NotATransmission -> text "Not a valid transmission."
+                            _ -> text "I dunno."
+                    _ -> text "No errors."
+            _ -> text "All OK."
         ]
 
 inputField : Model -> String -> String -> Html Msg
@@ -86,6 +130,7 @@ inputField model caption fieldName =
                             NotInt -> text "Not a number."
                             EmptyString -> text "Put something in."
                             TooOld -> text "Too old."
+                            _ -> text "Don't know what to do here." -- this shouldn't happen
                     _ -> text "No errors"
             _ -> text "All OK"
         ]    
